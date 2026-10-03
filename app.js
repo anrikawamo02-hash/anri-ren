@@ -156,7 +156,7 @@
       await blinkOnce();
 
       // Occasionally add a natural double blink.
-      if (Math.random() < 0.18) {
+      if (Math.random() < 0.06) {
         await sleep(140);
         await blinkOnce();
       }
