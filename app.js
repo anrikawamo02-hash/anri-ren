@@ -10,6 +10,7 @@
   const micBtn = document.getElementById('micBtn');
   const sendBtn = document.getElementById('sendBtn');
   const msg = document.getElementById('msg');
+  const renImage = document.querySelector('.portrait img');
 
   const JP = {
     waiting: '\u5f85\u3063\u3066\u308b',
@@ -123,5 +124,44 @@
     }
   });
 
+  // Preload blink image so the first blink does not flash or lag.
+  const blinkPreload = new Image();
+  blinkPreload.src = 'ren_blink.png';
+
+  function scheduleNextBlink() {
+    // Random interval: about 3.2 to 6.2 seconds.
+    const nextBlink = 3200 + Math.random() * 3000;
+
+    setTimeout(() => {
+      doBlink();
+    }, nextBlink);
+  }
+
+  function doBlink() {
+    if (!renImage) return;
+
+    renImage.src = 'ren_blink.png';
+
+    // Keep eyes closed only very briefly.
+    setTimeout(() => {
+      renImage.src = 'ren.png';
+
+      // Occasionally do a soft double blink.
+      if (Math.random() < 0.18) {
+        setTimeout(() => {
+          renImage.src = 'ren_blink.png';
+
+          setTimeout(() => {
+            renImage.src = 'ren.png';
+            scheduleNextBlink();
+          }, 110);
+        }, 130);
+      } else {
+        scheduleNextBlink();
+      }
+    }, 125);
+  }
+
   applyAuto();
+  scheduleNextBlink();
 })();
