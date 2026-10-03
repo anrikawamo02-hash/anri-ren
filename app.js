@@ -124,42 +124,45 @@
     }
   });
 
-  // Preload blink image so the first blink does not flash or lag.
-  const blinkPreload = new Image();
-  blinkPreload.src = 'ren_blink.png';
+  // Preload all blink frames so switching is smooth.
+  ['ren.png', 'ren_halfblink.png', 'ren_blink.png'].forEach((src) => {
+    const img = new Image();
+    img.src = src;
+  });
+
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  async function blinkOnce() {
+    if (!renImage) return;
+
+    // Open -> half -> closed -> half -> open
+    renImage.src = 'ren_halfblink.png';
+    await sleep(70);
+
+    renImage.src = 'ren_blink.png';
+    await sleep(95);
+
+    renImage.src = 'ren_halfblink.png';
+    await sleep(70);
+
+    renImage.src = 'ren.png';
+  }
 
   function scheduleNextBlink() {
     // Random interval: about 3.2 to 6.2 seconds.
     const nextBlink = 3200 + Math.random() * 3000;
 
-    setTimeout(() => {
-      doBlink();
-    }, nextBlink);
-  }
+    setTimeout(async () => {
+      await blinkOnce();
 
-  function doBlink() {
-    if (!renImage) return;
-
-    renImage.src = 'ren_blink.png';
-
-    // Keep eyes closed only very briefly.
-    setTimeout(() => {
-      renImage.src = 'ren.png';
-
-      // Occasionally do a soft double blink.
+      // Occasionally add a natural double blink.
       if (Math.random() < 0.18) {
-        setTimeout(() => {
-          renImage.src = 'ren_blink.png';
-
-          setTimeout(() => {
-            renImage.src = 'ren.png';
-            scheduleNextBlink();
-          }, 110);
-        }, 130);
-      } else {
-        scheduleNextBlink();
+        await sleep(140);
+        await blinkOnce();
       }
-    }, 125);
+
+      scheduleNextBlink();
+    }, nextBlink);
   }
 
   applyAuto();
