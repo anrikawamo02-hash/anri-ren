@@ -163,6 +163,21 @@ body { min-height: 100vh; }
   object-fit: cover;
   object-position: center 36%;
   display: block;
+  transform-origin: 50% 46%;
+  will-change: transform;
+  animation: renIdleBreath 5.6s ease-in-out infinite;
+}
+
+/* Step 1 motion:
+   very small scale/vertical shift so Ren feels alive
+   without changing the face itself. */
+@keyframes renIdleBreath {
+  0%, 100% {
+    transform: scale(1.000) translateY(0);
+  }
+  50% {
+    transform: scale(1.008) translateY(1px);
+  }
 }
 
 .conversation {
@@ -278,6 +293,12 @@ button {
 
 button:active {
   transform: scale(.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .portrait img {
+    animation: none;
+  }
 }
 
 @media (max-width: 390px) {
