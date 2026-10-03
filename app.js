@@ -16,17 +16,18 @@
   }
 
   function setActive(btn) {
-    [autoBtn, blackBtn, lavBtn].forEach((b) => b.classList.remove('active'));
-    btn.classList.add('active');
+    [autoBtn, blackBtn, lavBtn].forEach((button) => {
+      button.classList.toggle('active', button === btn);
+    });
   }
 
   function applyAuto() {
     clearThemeClasses();
-    const h = new Date().getHours();
+    const hour = new Date().getHours();
 
-    if (h >= 5 && h < 12) {
+    if (hour >= 5 && hour < 12) {
       app.classList.add('theme-morning');
-    } else if (h >= 12 && h < 18) {
+    } else if (hour >= 12 && hour < 18) {
       app.classList.add('theme-evening');
     }
 
@@ -51,7 +52,7 @@
   voiceBtn.addEventListener('click', () => {
     voiceOn = !voiceOn;
     voiceBtn.classList.toggle('active', voiceOn);
-    voiceBtn.textContent = voiceOn ? 'ð é³å£°ON' : 'ð é³å£°OFF';
+    voiceBtn.textContent = voiceOn ? '🔊 音声ON' : '🔇 音声OFF';
   });
 
   lipBtn.addEventListener('click', () => {
@@ -59,11 +60,11 @@
   });
 
   micBtn.addEventListener('click', () => {
-    status.textContent = 'èãã¦ã';
-    bubble.innerHTML = '<div class="who">è®</div>ãã¤ã¯æ©è½ã¯æ¬¡ã®æ®µéã§ã¤ãªãã§ã';
+    status.textContent = '聞いてる';
+    bubble.innerHTML = '<div class="who">蓮</div>マイク機能は次の段階でつなぐで。';
 
     setTimeout(() => {
-      status.textContent = 'å¾ã£ã¦ã';
+      status.textContent = '待ってる';
     }, 1200);
   });
 
@@ -81,15 +82,15 @@
     const value = msg.value.trim();
     if (!value) return;
 
-    status.textContent = 'èãä¸­';
-    bubble.innerHTML = '<div class="who">æé</div>' + escapeHtml(value);
+    status.textContent = '考え中';
+    bubble.innerHTML = '<div class="who">杏里</div>' + escapeHtml(value);
 
     setTimeout(() => {
-      status.textContent = voiceOn ? 'è©±ãã¦ã' : 'è¿äºä¸­';
-      bubble.innerHTML = '<div class="who">è®</div>ããããã®æãã§å°ããã¤ä»ä¸ãã¦ãããã';
+      status.textContent = voiceOn ? '話してる' : '返事中';
+      bubble.innerHTML = '<div class="who">蓮</div>うん。この感じで、少しずつ杏里好みに仕上げていこか。';
 
       setTimeout(() => {
-        status.textContent = 'å¾ã£ã¦ã';
+        status.textContent = '待ってる';
       }, 1000);
     }, 500);
 
