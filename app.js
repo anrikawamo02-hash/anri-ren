@@ -1,4 +1,4 @@
-(() => {
+  (() => {
   const app = document.getElementById('app');
   const autoBtn = document.getElementById('autoBtn');
   const blackBtn = document.getElementById('blackBtn');
@@ -10,7 +10,7 @@
   const micBtn = document.getElementById('micBtn');
   const sendBtn = document.getElementById('sendBtn');
   const msg = document.getElementById('msg');
-  const renImage = document.querySelector('.portrait img');
+  const eyeLayer = document.getElementById('eyeLayer');
 
   const JP = {
     waiting: '\u5f85\u3063\u3066\u308b',
@@ -124,38 +124,46 @@
     }
   });
 
-  // Preload all blink frames so switching is smooth.
-  ['ren.png', 'ren_halfblink.png', 'ren_blink.png'].forEach((src) => {
+  ['eyes_half.png', 'eyes_closed.png'].forEach((src) => {
     const img = new Image();
     img.src = src;
   });
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-  async function blinkOnce() {
-    if (!renImage) return;
+  function showEyes(src) {
+    if (!eyeLayer) return;
+    eyeLayer.src = src;
+    eyeLayer.style.opacity = '1';
+  }
 
-    // Open -> half -> closed -> half -> open
-    renImage.src = 'ren_halfblink.png';
+  function hideEyes() {
+    if (!eyeLayer) return;
+    eyeLayer.style.opacity = '0';
+  }
+
+  async function blinkOnce() {
+    if (!eyeLayer) return;
+
+    showEyes('eyes_half.png');
     await sleep(70);
 
-    renImage.src = 'ren_blink.png';
+    showEyes('eyes_closed.png');
     await sleep(95);
 
-    renImage.src = 'ren_halfblink.png';
+    showEyes('eyes_half.png');
     await sleep(70);
 
-    renImage.src = 'ren.png';
+    hideEyes();
   }
 
   function scheduleNextBlink() {
-    // Random interval: about 3.2 to 6.2 seconds.
     const nextBlink = 3200 + Math.random() * 3000;
 
     setTimeout(async () => {
       await blinkOnce();
 
-      // Occasionally add a natural double blink.
+      // Rare double blink: about 6%.
       if (Math.random() < 0.06) {
         await sleep(140);
         await blinkOnce();
