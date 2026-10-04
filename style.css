@@ -179,12 +179,15 @@ body { min-height: 100vh; }
   -webkit-user-drag: none;
 }
 
-.ren-base {
-  z-index: 1;
-}
+.ren-base { z-index: 1; }
 
 .eye-layer {
   z-index: 2;
+  opacity: 0;
+}
+
+.mouth-layer {
+  z-index: 3;
   opacity: 0;
 }
 
@@ -278,9 +281,7 @@ textarea {
   outline: none;
 }
 
-textarea::placeholder {
-  color: var(--muted);
-}
+textarea::placeholder { color: var(--muted); }
 
 .iconbtn {
   width: 48px;
@@ -304,28 +305,18 @@ textarea::placeholder {
   text-align: center;
 }
 
-button {
-  -webkit-tap-highlight-color: transparent;
-}
+button { -webkit-tap-highlight-color: transparent; }
 
-button:active {
-  transform: scale(.98);
-}
+button:active { transform: scale(.98); }
 
 @media (prefers-reduced-motion: reduce) {
-  .portrait-stage {
-    animation: none;
-  }
+  .portrait-stage { animation: none; }
 }
 
 @media (max-width: 390px) {
-  .theme-btn {
-    padding: 0 8px;
-  }
+  .theme-btn { padding: 0 8px; }
 }
 
 @media (min-width: 700px) {
-  .portrait {
-    aspect-ratio: 16 / 10;
-  }
+  .portrait { aspect-ratio: 16 / 10; }
 }
