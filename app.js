@@ -1,4 +1,4 @@
-  (() => {
+(() => {
   const app = document.getElementById('app');
   const autoBtn = document.getElementById('autoBtn');
   const blackBtn = document.getElementById('blackBtn');
@@ -11,6 +11,7 @@
   const sendBtn = document.getElementById('sendBtn');
   const msg = document.getElementById('msg');
   const eyeLayer = document.getElementById('eyeLayer');
+  const mouthLayer = document.getElementById('mouthLayer');
 
   const JP = {
     waiting: '\u5f85\u3063\u3066\u308b',
@@ -70,8 +71,17 @@
     voiceBtn.textContent = voiceOn ? JP.voiceOn : JP.voiceOff;
   });
 
+  // mouth_small position-check mode:
+  // each tap switches between the untouched ren.png and mouth_small overlay.
+  let mouthTestOn = false;
+
   lipBtn.addEventListener('click', () => {
-    lipBtn.classList.toggle('active');
+    mouthTestOn = !mouthTestOn;
+    lipBtn.classList.toggle('active', mouthTestOn);
+
+    if (mouthLayer) {
+      mouthLayer.style.opacity = mouthTestOn ? '1' : '0';
+    }
   });
 
   function showBubble(who, text) {
@@ -124,7 +134,7 @@
     }
   });
 
-  ['eyes_half.png', 'eyes_closed.png'].forEach((src) => {
+  ['eyes_half.png', 'eyes_closed.png', 'mouth_small.png'].forEach((src) => {
     const img = new Image();
     img.src = src;
   });
@@ -163,7 +173,6 @@
     setTimeout(async () => {
       await blinkOnce();
 
-      // Rare double blink: about 6%.
       if (Math.random() < 0.06) {
         await sleep(140);
         await blinkOnce();
