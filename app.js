@@ -71,17 +71,37 @@
     voiceBtn.textContent = voiceOn ? JP.voiceOn : JP.voiceOff;
   });
 
-  // mouth_small position-check mode:
-  // each tap switches between the untouched ren.png and mouth_small overlay.
-  let mouthTestOn = false;
+  // å£ãã¯ä½ç½®ç¢ºèªãã¹ã
+  // ã¿ãããã¨ã«ï¼
+  // éãå£ â small â open â small â éãå£
+  const mouthFrames = [
+    null,
+    'mouth_small.png',
+    'mouth_open.png',
+    'mouth_small.png',
+    null
+  ];
+
+  let mouthFrameIndex = 0;
+
+  function showMouth(src) {
+    if (!mouthLayer) return;
+
+    if (!src) {
+      mouthLayer.style.opacity = '0';
+      return;
+    }
+
+    mouthLayer.src = src;
+    mouthLayer.style.opacity = '1';
+  }
 
   lipBtn.addEventListener('click', () => {
-    mouthTestOn = !mouthTestOn;
-    lipBtn.classList.toggle('active', mouthTestOn);
+    mouthFrameIndex = (mouthFrameIndex + 1) % mouthFrames.length;
+    const current = mouthFrames[mouthFrameIndex];
 
-    if (mouthLayer) {
-      mouthLayer.style.opacity = mouthTestOn ? '1' : '0';
-    }
+    showMouth(current);
+    lipBtn.classList.toggle('active', current !== null);
   });
 
   function showBubble(who, text) {
@@ -134,7 +154,12 @@
     }
   });
 
-  ['eyes_half.png', 'eyes_closed.png', 'mouth_small.png'].forEach((src) => {
+  [
+    'eyes_half.png',
+    'eyes_closed.png',
+    'mouth_small.png',
+    'mouth_open.png'
+  ].forEach((src) => {
     const img = new Image();
     img.src = src;
   });
