@@ -10,18 +10,9 @@
   const micBtn = document.getElementById('micBtn');
   const sendBtn = document.getElementById('sendBtn');
   const msg = document.getElementById('msg');
+  const renBase = document.getElementById('renImage') || document.querySelector('.ren-base');
   const eyeLayer = document.getElementById('eyeLayer');
   const mouthLayer = document.getElementById('mouthLayer');
-
-  const renBase =
-    document.getElementById('renImage') ||
-    document.getElementById('ren') ||
-    document.querySelector('.ren-image') ||
-    document.querySelector('.ren-stage img:not(.eye-layer):not(.mouth-layer)') ||
-    [...document.images].find((img) => {
-      const src = (img.getAttribute('src') || '').split('?')[0];
-      return src === 'ren.png' || src.endsWith('/ren.png');
-    });
 
   const JP = {
     waiting: '\u5f85\u3063\u3066\u308b',
@@ -42,34 +33,73 @@
     mouthPending: '\u53e3\u30d1\u30af\u6e96\u5099\u4e2d'
   };
 
-  const BASE_ONLY_TEST = true;
-
+  /*
+    制作中の共通ルール
+    - 各プロフィールは「フォルダー単位」で扱う。
+    - フォルダー内のファイル名は共通：
+      ren_base.png / eyes_half.png / eyes_closed.png /
+      mouth_small.png / mouth_open.png / mouth_round.png
+    - 現在は目元だけ有効。口パクはまだ無効。
+  */
   const REN_PROFILES = {
     spring_summer: {
-      day: { base: 'images/spring_summer_day_main/ren_base.png' },
-      night: { base: 'images/spring_summer_night_main/ren_base.png' }
+      day: 'images/spring_summer_day_main',
+      night: 'images/spring_summer_night_main'
     },
     winter: {
-      day: { base: 'images/winter_day_main/ren_base.png' },
-      night: { base: 'images/winter_night_main/ren_base.png' }
+      day: 'images/winter_day_main',
+      night: 'images/winter_night_main'
     }
   };
 
-  // 3/1ã8/31 = æ¥å¤ã9/1ã2ææ« = ç§å¬ï¼winterãã©ã«ãã¼ãä½¿ç¨ï¼
+  // 開発中はページを再読み込みするたびに最新画像を取りやすくする。
+  const DEV_ASSET_VERSION = Date.now();
+
+  // 3/1〜8/31 = 春夏、9/1〜2月末 = 秋冬（winterフォルダー）
   function getSeason(date = new Date()) {
     const month = date.getMonth() + 1;
     return month >= 3 && month <= 8 ? 'spring_summer' : 'winter';
   }
 
-  // 06:00ã17:59 = dayã18:00ã05:59 = night
+  // 06:00〜17:59 = day、18:00〜05:59 = night
   function getTimeSlot(date = new Date()) {
     const hour = date.getHours();
     return hour >= 6 && hour < 18 ? 'day' : 'night';
   }
 
+  function withVersion(path) {
+    return `${path}?v=${DEV_ASSET_VERSION}`;
+  }
+
+  function buildAssets(season, slot) {
+    const folder = REN_PROFILES[season]?.[slot];
+    if (!folder) return null;
+
+    return {
+      key: `${season}:${slot}`,
+      folder,
+      base: withVersion(`${folder}/ren_base.png`),
+      eyesHalf: withVersion(`${folder}/eyes_half.png`),
+      eyesClosed: withVersion(`${folder}/eyes_closed.png`),
+      mouthSmall: withVersion(`${folder}/mouth_small.png`),
+      mouthOpen: withVersion(`${folder}/mouth_open.png`),
+      mouthRound: withVersion(`${folder}/mouth_round.png`)
+    };
+  }
+
   let displayMode = 'auto';
-  let switchToken = 0;
   let displayCheckButtons = {};
+
+  let activeAssets = null;
+  let activeProfileKey = '';
+  let switchToken = 0;
+  let blinkToken = 0;
+  let blinkTimer = null;
+
+  let eyeAvailability = {
+    half: false,
+    closed: false
+  };
 
   function currentProfile() {
     const now = new Date();
@@ -78,54 +108,148 @@
     return { season, slot };
   }
 
-  function hideOldFaceLayers() {
-    if (eyeLayer) eyeLayer.style.opacity = '0';
-    if (mouthLayer) mouthLayer.style.opacity = '0';
+  function preloadImage(src) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(true);
+      img.onerror = () => resolve(false);
+      img.src = src;
+    });
   }
 
-  function switchBaseImage(season, slot, instant = false) {
-    if (!renBase) return;
-    const profile = REN_PROFILES[season]?.[slot];
-    if (!profile) return;
+  function hideEyes() {
+    if (!eyeLayer) return;
+    eyeLayer.style.opacity = '0';
+  }
+
+  function showEyes(src) {
+    if (!eyeLayer) return;
+    eyeLayer.src = src;
+    eyeLayer.style.opacity = '1';
+  }
+
+  function hideMouth() {
+    if (!mouthLayer) return;
+    mouthLayer.style.opacity = '0';
+    mouthLayer.removeAttribute('src');
+  }
+
+  function stopBlinking() {
+    blinkToken += 1;
+    if (blinkTimer) {
+      clearTimeout(blinkTimer);
+      blinkTimer = null;
+    }
+    hideEyes();
+  }
+
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  async function blinkOnce(token) {
+    if (!activeAssets || !eyeAvailability.half || token !== blinkToken) return;
+
+    // 開眼（ベース）→ 半目
+    showEyes(activeAssets.eyesHalf);
+    await sleep(70);
+    if (token !== blinkToken) return;
+
+    // 閉じ目がまだ無い制作途中では、半目だけ確認できる。
+    if (eyeAvailability.closed) {
+      showEyes(activeAssets.eyesClosed);
+      await sleep(95);
+      if (token !== blinkToken) return;
+
+      showEyes(activeAssets.eyesHalf);
+      await sleep(70);
+      if (token !== blinkToken) return;
+    }
+
+    // 半目 → 開眼（ベース）
+    hideEyes();
+  }
+
+  function scheduleNextBlink() {
+    if (!eyeAvailability.half || !activeAssets) return;
+
+    const token = blinkToken;
+    const nextBlink = 3200 + Math.random() * 3000;
+
+    blinkTimer = setTimeout(async () => {
+      if (token !== blinkToken) return;
+
+      await blinkOnce(token);
+
+      if (token !== blinkToken) return;
+
+      // 元の確定設定：まれに二度瞬き（6%）
+      if (Math.random() < 0.06) {
+        await sleep(140);
+        if (token !== blinkToken) return;
+        await blinkOnce(token);
+      }
+
+      if (token === blinkToken) {
+        scheduleNextBlink();
+      }
+    }, nextBlink);
+  }
+
+  async function switchBaseImage(nextSrc, instant = false) {
+    if (!renBase) return false;
 
     const myToken = ++switchToken;
-    const nextSrc = profile.base;
+    const loaded = await preloadImage(nextSrc);
+
+    if (myToken !== switchToken) return false;
+
+    if (!loaded) {
+      renBase.style.opacity = '1';
+      console.log('Base image could not be loaded:', nextSrc);
+      return false;
+    }
+
     const currentSrc = renBase.getAttribute('src') || '';
 
     if (currentSrc === nextSrc) {
       renBase.style.opacity = '1';
+      return true;
+    }
+
+    if (!instant) {
+      renBase.style.opacity = '0';
+      await sleep(360);
+      if (myToken !== switchToken) return false;
+    }
+
+    renBase.src = nextSrc;
+
+    requestAnimationFrame(() => {
+      if (myToken === switchToken) {
+        renBase.style.opacity = '1';
+      }
+    });
+
+    return true;
+  }
+
+  async function prepareEyes(assets, tokenAtStart) {
+    const [half, closed] = await Promise.all([
+      preloadImage(assets.eyesHalf),
+      preloadImage(assets.eyesClosed)
+    ]);
+
+    if (tokenAtStart !== switchToken || activeAssets?.key !== assets.key) {
       return;
     }
 
-    const preloader = new Image();
+    eyeAvailability = { half, closed };
 
-    preloader.onload = () => {
-      if (myToken !== switchToken) return;
+    stopBlinking();
 
-      const doSwap = () => {
-        if (myToken !== switchToken) return;
-        renBase.src = nextSrc;
-        requestAnimationFrame(() => {
-          renBase.style.opacity = '1';
-        });
-      };
-
-      renBase.style.opacity = '0';
-
-      if (instant) {
-        doSwap();
-      } else {
-        setTimeout(doSwap, 360);
-      }
-    };
-
-    preloader.onerror = () => {
-      if (myToken !== switchToken) return;
-      renBase.style.opacity = '1';
-      console.log('Base image could not be loaded:', nextSrc);
-    };
-
-    preloader.src = nextSrc;
+    // stopBlinking() increments blinkToken, so start a fresh cycle after it.
+    if (eyeAvailability.half) {
+      scheduleNextBlink();
+    }
   }
 
   function updateDisplayCheckButtons() {
@@ -134,11 +258,29 @@
     });
   }
 
-  function applyCurrentRen(instant = false) {
-    hideOldFaceLayers();
+  async function applyCurrentRen(instant = false) {
     const { season, slot } = currentProfile();
-    switchBaseImage(season, slot, instant);
+    const assets = buildAssets(season, slot);
+
     updateDisplayCheckButtons();
+
+    if (!assets) return;
+
+    if (activeProfileKey === assets.key && activeAssets) {
+      return;
+    }
+
+    stopBlinking();
+    hideMouth();
+
+    const switched = await switchBaseImage(assets.base, instant);
+    if (!switched) return;
+
+    activeAssets = assets;
+    activeProfileKey = assets.key;
+
+    const tokenAtStart = switchToken;
+    prepareEyes(assets, tokenAtStart);
   }
 
   function createDisplayCheckPanel() {
@@ -202,14 +344,17 @@
         background: rgba(255,255,255,.04);
         font-size: 13px;
       }
+
       .ren-display-check__label {
         opacity: .72;
         white-space: nowrap;
       }
+
       .ren-display-check__group {
         display: flex;
         gap: 6px;
       }
+
       .ren-display-check__btn {
         appearance: none;
         border: 1px solid rgba(255,255,255,.14);
@@ -220,23 +365,34 @@
         font: inherit;
         font-weight: 700;
       }
+
       .ren-display-check__btn.is-active {
         background: #f5f5f7;
         color: #111216;
       }
     `;
+
     document.head.appendChild(style);
   }
 
+  // 自動表示時は、6時・18時などの切り替わりを拾う。
   setInterval(() => {
     if (displayMode === 'auto') {
-      applyCurrentRen();
+      const { season, slot } = currentProfile();
+      const nextKey = `${season}:${slot}`;
+
+      if (nextKey !== activeProfileKey) {
+        applyCurrentRen();
+      }
     }
   }, 60 * 1000);
 
   if (renBase) {
     renBase.style.transition = 'opacity 360ms ease';
   }
+
+  hideEyes();
+  hideMouth();
 
   function clearThemeClasses() {
     app?.classList.remove('theme-lavender', 'theme-morning', 'theme-evening');
@@ -282,7 +438,8 @@
     voiceBtn.textContent = voiceOn ? JP.voiceOn : JP.voiceOff;
   });
 
-  if (BASE_ONLY_TEST && lipBtn) {
+  // 今は目元の確認段階なので、口パクはまだ動かさない。
+  if (lipBtn) {
     lipBtn.disabled = true;
     lipBtn.classList.remove('active');
     lipBtn.textContent = JP.mouthPending;
@@ -342,46 +499,6 @@
       sendDemo();
     }
   });
-
-  if (!BASE_ONLY_TEST) {
-    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-    function showEyes(src) {
-      if (!eyeLayer) return;
-      eyeLayer.src = src;
-      eyeLayer.style.opacity = '1';
-    }
-
-    function hideEyes() {
-      if (!eyeLayer) return;
-      eyeLayer.style.opacity = '0';
-    }
-
-    async function blinkOnce() {
-      if (!eyeLayer) return;
-      showEyes('eyes_half.png');
-      await sleep(70);
-      showEyes('eyes_closed.png');
-      await sleep(95);
-      showEyes('eyes_half.png');
-      await sleep(70);
-      hideEyes();
-    }
-
-    function scheduleNextBlink() {
-      const nextBlink = 3200 + Math.random() * 3000;
-      setTimeout(async () => {
-        await blinkOnce();
-        if (Math.random() < 0.06) {
-          await sleep(140);
-          await blinkOnce();
-        }
-        scheduleNextBlink();
-      }, nextBlink);
-    }
-
-    scheduleNextBlink();
-  }
 
   applyAuto();
   createDisplayCheckPanel();
