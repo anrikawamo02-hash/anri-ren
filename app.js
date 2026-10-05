@@ -19,8 +19,8 @@
     document.querySelector('.ren-image') ||
     document.querySelector('.ren-stage img:not(.eye-layer):not(.mouth-layer)') ||
     [...document.images].find((img) => {
-      const src = img.getAttribute('src') || '';
-      return /(^|\\/)ren\\.png(?:\\?.*)?$/.test(src);
+      const src = (img.getAttribute('src') || '').split('?')[0];
+      return src === 'ren.png' || src.endsWith('/ren.png');
     });
 
   const JP = {
