@@ -44,13 +44,26 @@
 
   const BASE_ONLY_TEST = true;
 
-  const WINTER_PROFILES = {
-    day: { base: 'images/winter_day_main/ren_base.png' },
-    night: { base: 'images/winter_night_main/ren_base.png' }
+  const REN_PROFILES = {
+    spring_summer: {
+      day: { base: 'images/spring_summer_day_main/ren_base.png' },
+      night: { base: 'images/spring_summer_night_main/ren_base.png' }
+    },
+    winter: {
+      day: { base: 'images/winter_day_main/ren_base.png' },
+      night: { base: 'images/winter_night_main/ren_base.png' }
+    }
   };
 
-  function getTimeSlot() {
-    const hour = new Date().getHours();
+  // 3/1ã8/31 = æ¥å¤ã9/1ã2ææ« = ç§å¬ï¼winterãã©ã«ãã¼ãä½¿ç¨ï¼
+  function getSeason(date = new Date()) {
+    const month = date.getMonth() + 1;
+    return month >= 3 && month <= 8 ? 'spring_summer' : 'winter';
+  }
+
+  // 06:00ã17:59 = dayã18:00ã05:59 = night
+  function getTimeSlot(date = new Date()) {
+    const hour = date.getHours();
     return hour >= 6 && hour < 18 ? 'day' : 'night';
   }
 
@@ -58,8 +71,11 @@
   let switchToken = 0;
   let displayCheckButtons = {};
 
-  function currentSlot() {
-    return displayMode === 'auto' ? getTimeSlot() : displayMode;
+  function currentProfile() {
+    const now = new Date();
+    const season = getSeason(now);
+    const slot = displayMode === 'auto' ? getTimeSlot(now) : displayMode;
+    return { season, slot };
   }
 
   function hideOldFaceLayers() {
@@ -67,9 +83,9 @@
     if (mouthLayer) mouthLayer.style.opacity = '0';
   }
 
-  function switchBaseImage(slot, instant = false) {
+  function switchBaseImage(season, slot, instant = false) {
     if (!renBase) return;
-    const profile = WINTER_PROFILES[slot];
+    const profile = REN_PROFILES[season]?.[slot];
     if (!profile) return;
 
     const myToken = ++switchToken;
@@ -120,7 +136,8 @@
 
   function applyCurrentRen(instant = false) {
     hideOldFaceLayers();
-    switchBaseImage(currentSlot(), instant);
+    const { season, slot } = currentProfile();
+    switchBaseImage(season, slot, instant);
     updateDisplayCheckButtons();
   }
 
