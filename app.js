@@ -30,12 +30,8 @@
     displayAuto: '\u81ea\u52d5',
     displayDay: '\u663c',
     displayNight: '\u591c',
-    mouthPending: '\u53e3\u30d1\u30af\u6e96\u5099\u4e2d',
-    mouthCheck: '\u53e3\u5143\u78ba\u8a8d',
-    mouthNormal: '\u901a\u5e38',
-    mouthSmall: '\u5c0f',
-    mouthOpen: '\u5927',
-    mouthRound: '\u3046\u30fb\u304a'
+    mouthPractice: '\u53e3\u30d1\u30af\u7df4\u7fd2',
+    mouthStop: '\u53e3\u30d1\u30af\u505c\u6b62'
   };
 
   /*
@@ -44,8 +40,7 @@
     - ãã©ã«ãã¼åã®ãã¡ã¤ã«åã¯å±éï¼
       ren_base.png / eyes_half.png / eyes_closed.png /
       mouth_small.png / mouth_open.png / mouth_round.png
-    - ç®åã¯éå¸¸ç¬ããæå¹ã
-    - å£åã¯å¶ä½ç¢ºèªç¨ããã«ã§åå¥è¡¨ç¤ºã§ãããå®éã®å£ãã¯åä½ã¯ã¾ã ç¡å¹ã
+    - ç®åã¯éå¸¸åä½ãå£åã¯ä¸ã®ãå£ãã¯ç·´ç¿ããã¿ã³ã§ç¢ºèªããã
   */
   const REN_PROFILES = {
     spring_summer: {
@@ -95,8 +90,6 @@
 
   let displayMode = 'auto';
   let displayCheckButtons = {};
-  let mouthCheckButtons = {};
-  let mouthCheckMode = 'normal';
 
   let activeAssets = null;
   let activeProfileKey = '';
@@ -114,6 +107,9 @@
     open: false,
     round: false
   };
+
+  let mouthPracticeOn = false;
+  let mouthPracticeToken = 0;
 
   function currentProfile() {
     const now = new Date();
@@ -149,44 +145,71 @@
   }
 
   function showMouth(src) {
-    if (!mouthLayer) return;
+    if (!mouthLayer || !src) return;
     mouthLayer.src = src;
     mouthLayer.style.opacity = '1';
   }
 
-  function updateMouthCheckButtons() {
-    Object.entries(mouthCheckButtons).forEach(([mode, button]) => {
-      const available =
-        mode === 'normal' ||
-        (mode === 'small' && mouthAvailability.small) ||
-        (mode === 'open' && mouthAvailability.open) ||
-        (mode === 'round' && mouthAvailability.round);
+  function updateLipButton() {
+    if (!lipBtn) return;
 
-      button.disabled = !available;
-      button.style.opacity = available ? '1' : '0.4';
-      button.classList.toggle('is-active', mode === mouthCheckMode);
-    });
+    const hasAnyMouth =
+      mouthAvailability.small ||
+      mouthAvailability.open ||
+      mouthAvailability.round;
+
+    lipBtn.disabled = !hasAnyMouth;
+    lipBtn.style.opacity = hasAnyMouth ? '1' : '0.55';
+    lipBtn.classList.toggle('active', mouthPracticeOn);
+    lipBtn.textContent = mouthPracticeOn ? JP.mouthStop : JP.mouthPractice;
   }
 
-  function applyMouthCheck() {
-    if (!activeAssets) {
-      hideMouth();
-      updateMouthCheckButtons();
+  function stopMouthPractice() {
+    mouthPracticeOn = false;
+    mouthPracticeToken += 1;
+    hideMouth();
+    updateLipButton();
+  }
+
+  async function runMouthPractice() {
+    if (!activeAssets) return;
+
+    const frames = [
+      { available: mouthAvailability.small, src: activeAssets.mouthSmall },
+      { available: mouthAvailability.open, src: activeAssets.mouthOpen },
+      { available: mouthAvailability.round, src: activeAssets.mouthRound }
+    ].filter((frame) => frame.available);
+
+    if (!frames.length) {
+      stopMouthPractice();
       return;
     }
 
-    if (mouthCheckMode === 'small' && mouthAvailability.small) {
-      showMouth(activeAssets.mouthSmall);
-    } else if (mouthCheckMode === 'open' && mouthAvailability.open) {
-      showMouth(activeAssets.mouthOpen);
-    } else if (mouthCheckMode === 'round' && mouthAvailability.round) {
-      showMouth(activeAssets.mouthRound);
-    } else {
-      mouthCheckMode = 'normal';
+    mouthPracticeOn = true;
+    const token = ++mouthPracticeToken;
+    updateLipButton();
+
+    while (mouthPracticeOn && token === mouthPracticeToken) {
+      // éå¸¸ï¼éãå£ï¼
       hideMouth();
+      await sleep(700);
+      if (!mouthPracticeOn || token !== mouthPracticeToken) break;
+
+      // å° â å¤§ â ãã»ãï¼å­å¨ããç´ æã ãé çªã«ç¢ºèªï¼
+      for (const frame of frames) {
+        showMouth(frame.src);
+        await sleep(900);
+        if (!mouthPracticeOn || token !== mouthPracticeToken) break;
+      }
+
+      if (!mouthPracticeOn || token !== mouthPracticeToken) break;
+
+      // 1å¨ãã¨ã«éå¸¸ã¸æ»ã
+      hideMouth();
+      await sleep(700);
     }
 
-    updateMouthCheckButtons();
+    hideMouth();
   }
 
   function stopBlinking() {
@@ -287,21 +310,6 @@
     return true;
   }
 
-  async function prepareMouth(assets, tokenAtStart) {
-    const [small, open, round] = await Promise.all([
-      preloadImage(assets.mouthSmall),
-      preloadImage(assets.mouthOpen),
-      preloadImage(assets.mouthRound)
-    ]);
-
-    if (tokenAtStart !== switchToken || activeAssets?.key !== assets.key) {
-      return;
-    }
-
-    mouthAvailability = { small, open, round };
-    applyMouthCheck();
-  }
-
   async function prepareEyes(assets, tokenAtStart) {
     const [half, closed] = await Promise.all([
       preloadImage(assets.eyesHalf),
@@ -320,6 +328,21 @@
     if (eyeAvailability.half) {
       scheduleNextBlink();
     }
+  }
+
+  async function prepareMouth(assets, tokenAtStart) {
+    const [small, open, round] = await Promise.all([
+      preloadImage(assets.mouthSmall),
+      preloadImage(assets.mouthOpen),
+      preloadImage(assets.mouthRound)
+    ]);
+
+    if (tokenAtStart !== switchToken || activeAssets?.key !== assets.key) {
+      return;
+    }
+
+    mouthAvailability = { small, open, round };
+    updateLipButton();
   }
 
   function updateDisplayCheckButtons() {
@@ -341,10 +364,7 @@
     }
 
     stopBlinking();
-    mouthCheckMode = 'normal';
-    mouthAvailability = { small: false, open: false, round: false };
-    hideMouth();
-    updateMouthCheckButtons();
+    stopMouthPractice();
 
     const switched = await switchBaseImage(assets.base, instant);
     if (!switched) return;
@@ -449,112 +469,6 @@
     document.head.appendChild(style);
   }
 
-  function createMouthCheckPanel() {
-    document.getElementById('renMouthCheckPanel')?.remove();
-    document.getElementById('renMouthCheckStyle')?.remove();
-
-    const panel = document.createElement('div');
-    panel.id = 'renMouthCheckPanel';
-    panel.className = 'ren-mouth-check';
-
-    const label = document.createElement('span');
-    label.className = 'ren-mouth-check__label';
-    label.textContent = JP.mouthCheck;
-
-    const group = document.createElement('div');
-    group.className = 'ren-mouth-check__group';
-
-    [
-      ['normal', JP.mouthNormal],
-      ['small', JP.mouthSmall],
-      ['open', JP.mouthOpen],
-      ['round', JP.mouthRound]
-    ].forEach(([mode, text]) => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'ren-mouth-check__btn';
-      button.dataset.mode = mode;
-      button.textContent = text;
-
-      button.addEventListener('click', () => {
-        if (button.disabled) return;
-        mouthCheckMode = mode;
-        applyMouthCheck();
-      });
-
-      group.appendChild(button);
-      mouthCheckButtons[mode] = button;
-    });
-
-    panel.append(label, group);
-
-    const displayPanel = document.getElementById('renDisplayCheckPanel');
-    if (displayPanel?.parentElement) {
-      displayPanel.insertAdjacentElement('afterend', panel);
-    } else {
-      const themeContainer = lavBtn?.parentElement;
-      if (themeContainer?.parentElement) {
-        themeContainer.insertAdjacentElement('afterend', panel);
-      } else if (app) {
-        app.prepend(panel);
-      } else {
-        document.body.prepend(panel);
-      }
-    }
-
-    const style = document.createElement('style');
-    style.id = 'renMouthCheckStyle';
-    style.textContent = `
-      .ren-mouth-check {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-        margin: 0 0 12px;
-        padding: 8px 10px;
-        border: 1px solid rgba(255,255,255,.12);
-        border-radius: 14px;
-        background: rgba(255,255,255,.04);
-        font-size: 13px;
-      }
-
-      .ren-mouth-check__label {
-        opacity: .72;
-        white-space: nowrap;
-      }
-
-      .ren-mouth-check__group {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: flex-end;
-        gap: 6px;
-      }
-
-      .ren-mouth-check__btn {
-        appearance: none;
-        border: 1px solid rgba(255,255,255,.14);
-        border-radius: 999px;
-        padding: 7px 11px;
-        background: rgba(255,255,255,.05);
-        color: inherit;
-        font: inherit;
-        font-weight: 700;
-      }
-
-      .ren-mouth-check__btn.is-active {
-        background: #f5f5f7;
-        color: #111216;
-      }
-
-      .ren-mouth-check__btn:disabled {
-        cursor: default;
-      }
-    `;
-
-    document.head.appendChild(style);
-    updateMouthCheckButtons();
-  }
-
   // èªåè¡¨ç¤ºæã¯ã6æã»18æãªã©ã®åãæ¿ãããæ¾ãã
   setInterval(() => {
     if (displayMode === 'auto') {
@@ -618,12 +532,22 @@
     voiceBtn.textContent = voiceOn ? JP.voiceOn : JP.voiceOff;
   });
 
-  // å®éã®èªåå£ãã¯ã¯ã¾ã æªæ¥ç¶ãä»åã¯ç´ æç¢ºèªããã«ã ãæå¹ã«ããã
+  // æ¢å­ã®ãå£ãã¯ç·´ç¿ããã¿ã³ã ããä½¿ãã
+  // 1åæ¼ãã¨ éå¸¸ â å° â å¤§ â ãã»ã â éå¸¸â¦ ãç¹°ãè¿ãã
+  // ãã1åæ¼ãã¨åæ­¢ãã¦éå¸¸ã®éãå£ã¸æ»ãã
   if (lipBtn) {
     lipBtn.disabled = true;
     lipBtn.classList.remove('active');
-    lipBtn.textContent = JP.mouthPending;
+    lipBtn.textContent = JP.mouthPractice;
     lipBtn.style.opacity = '0.55';
+
+    lipBtn.addEventListener('click', () => {
+      if (mouthPracticeOn) {
+        stopMouthPractice();
+      } else {
+        runMouthPractice();
+      }
+    });
   }
 
   function showBubble(who, text) {
@@ -682,6 +606,5 @@
 
   applyAuto();
   createDisplayCheckPanel();
-  createMouthCheckPanel();
   applyCurrentRen(true);
 })();
