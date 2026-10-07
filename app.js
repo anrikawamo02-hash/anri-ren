@@ -30,16 +30,22 @@
     displayAuto: '\u81ea\u52d5',
     displayDay: '\u663c',
     displayNight: '\u591c',
-    mouthPending: '\u53e3\u30d1\u30af\u6e96\u5099\u4e2d'
+    mouthPending: '\u53e3\u30d1\u30af\u6e96\u5099\u4e2d',
+    mouthCheck: '\u53e3\u5143\u78ba\u8a8d',
+    mouthNormal: '\u901a\u5e38',
+    mouthSmall: '\u5c0f',
+    mouthOpen: '\u5927',
+    mouthRound: '\u3046\u30fb\u304a'
   };
 
   /*
-    制作中の共通ルール
-    - 各プロフィールは「フォルダー単位」で扱う。
-    - フォルダー内のファイル名は共通：
+    å¶ä½ä¸­ã®å±éã«ã¼ã«
+    - åãã­ãã£ã¼ã«ã¯ããã©ã«ãã¼åä½ãã§æ±ãã
+    - ãã©ã«ãã¼åã®ãã¡ã¤ã«åã¯å±éï¼
       ren_base.png / eyes_half.png / eyes_closed.png /
       mouth_small.png / mouth_open.png / mouth_round.png
-    - 現在は目元だけ有効。口パクはまだ無効。
+    - ç®åã¯éå¸¸ç¬ããæå¹ã
+    - å£åã¯å¶ä½ç¢ºèªç¨ããã«ã§åå¥è¡¨ç¤ºã§ãããå®éã®å£ãã¯åä½ã¯ã¾ã ç¡å¹ã
   */
   const REN_PROFILES = {
     spring_summer: {
@@ -52,16 +58,16 @@
     }
   };
 
-  // 開発中はページを再読み込みするたびに最新画像を取りやすくする。
+  // éçºä¸­ã¯ãã¼ã¸ãåèª­ã¿è¾¼ã¿ãããã³ã«ææ°ç»åãåããããããã
   const DEV_ASSET_VERSION = Date.now();
 
-  // 3/1〜8/31 = 春夏、9/1〜2月末 = 秋冬（winterフォルダー）
+  // 3/1ã8/31 = æ¥å¤ã9/1ã2ææ« = ç§å¬ï¼winterãã©ã«ãã¼ï¼
   function getSeason(date = new Date()) {
     const month = date.getMonth() + 1;
     return month >= 3 && month <= 8 ? 'spring_summer' : 'winter';
   }
 
-  // 06:00〜17:59 = day、18:00〜05:59 = night
+  // 06:00ã17:59 = dayã18:00ã05:59 = night
   function getTimeSlot(date = new Date()) {
     const hour = date.getHours();
     return hour >= 6 && hour < 18 ? 'day' : 'night';
@@ -89,6 +95,8 @@
 
   let displayMode = 'auto';
   let displayCheckButtons = {};
+  let mouthCheckButtons = {};
+  let mouthCheckMode = 'normal';
 
   let activeAssets = null;
   let activeProfileKey = '';
@@ -99,6 +107,12 @@
   let eyeAvailability = {
     half: false,
     closed: false
+  };
+
+  let mouthAvailability = {
+    small: false,
+    open: false,
+    round: false
   };
 
   function currentProfile() {
@@ -134,6 +148,47 @@
     mouthLayer.removeAttribute('src');
   }
 
+  function showMouth(src) {
+    if (!mouthLayer) return;
+    mouthLayer.src = src;
+    mouthLayer.style.opacity = '1';
+  }
+
+  function updateMouthCheckButtons() {
+    Object.entries(mouthCheckButtons).forEach(([mode, button]) => {
+      const available =
+        mode === 'normal' ||
+        (mode === 'small' && mouthAvailability.small) ||
+        (mode === 'open' && mouthAvailability.open) ||
+        (mode === 'round' && mouthAvailability.round);
+
+      button.disabled = !available;
+      button.style.opacity = available ? '1' : '0.4';
+      button.classList.toggle('is-active', mode === mouthCheckMode);
+    });
+  }
+
+  function applyMouthCheck() {
+    if (!activeAssets) {
+      hideMouth();
+      updateMouthCheckButtons();
+      return;
+    }
+
+    if (mouthCheckMode === 'small' && mouthAvailability.small) {
+      showMouth(activeAssets.mouthSmall);
+    } else if (mouthCheckMode === 'open' && mouthAvailability.open) {
+      showMouth(activeAssets.mouthOpen);
+    } else if (mouthCheckMode === 'round' && mouthAvailability.round) {
+      showMouth(activeAssets.mouthRound);
+    } else {
+      mouthCheckMode = 'normal';
+      hideMouth();
+    }
+
+    updateMouthCheckButtons();
+  }
+
   function stopBlinking() {
     blinkToken += 1;
     if (blinkTimer) {
@@ -148,12 +203,12 @@
   async function blinkOnce(token) {
     if (!activeAssets || !eyeAvailability.half || token !== blinkToken) return;
 
-    // 開眼（ベース）→ 半目
+    // éç¼ï¼ãã¼ã¹ï¼â åç®
     showEyes(activeAssets.eyesHalf);
     await sleep(70);
     if (token !== blinkToken) return;
 
-    // 閉じ目がまだ無い制作途中では、半目だけ確認できる。
+    // éãç®ãã¾ã ç¡ãå¶ä½éä¸­ã§ã¯ãåç®ã ãç¢ºèªã§ããã
     if (eyeAvailability.closed) {
       showEyes(activeAssets.eyesClosed);
       await sleep(95);
@@ -164,7 +219,7 @@
       if (token !== blinkToken) return;
     }
 
-    // 半目 → 開眼（ベース）
+    // åç® â éç¼ï¼ãã¼ã¹ï¼
     hideEyes();
   }
 
@@ -181,7 +236,7 @@
 
       if (token !== blinkToken) return;
 
-      // 元の確定設定：まれに二度瞬き（6%）
+      // åã®ç¢ºå®è¨­å®ï¼ã¾ãã«äºåº¦ç¬ãï¼6%ï¼
       if (Math.random() < 0.06) {
         await sleep(140);
         if (token !== blinkToken) return;
@@ -232,6 +287,21 @@
     return true;
   }
 
+  async function prepareMouth(assets, tokenAtStart) {
+    const [small, open, round] = await Promise.all([
+      preloadImage(assets.mouthSmall),
+      preloadImage(assets.mouthOpen),
+      preloadImage(assets.mouthRound)
+    ]);
+
+    if (tokenAtStart !== switchToken || activeAssets?.key !== assets.key) {
+      return;
+    }
+
+    mouthAvailability = { small, open, round };
+    applyMouthCheck();
+  }
+
   async function prepareEyes(assets, tokenAtStart) {
     const [half, closed] = await Promise.all([
       preloadImage(assets.eyesHalf),
@@ -271,7 +341,10 @@
     }
 
     stopBlinking();
+    mouthCheckMode = 'normal';
+    mouthAvailability = { small: false, open: false, round: false };
     hideMouth();
+    updateMouthCheckButtons();
 
     const switched = await switchBaseImage(assets.base, instant);
     if (!switched) return;
@@ -281,6 +354,7 @@
 
     const tokenAtStart = switchToken;
     prepareEyes(assets, tokenAtStart);
+    prepareMouth(assets, tokenAtStart);
   }
 
   function createDisplayCheckPanel() {
@@ -375,7 +449,113 @@
     document.head.appendChild(style);
   }
 
-  // 自動表示時は、6時・18時などの切り替わりを拾う。
+  function createMouthCheckPanel() {
+    document.getElementById('renMouthCheckPanel')?.remove();
+    document.getElementById('renMouthCheckStyle')?.remove();
+
+    const panel = document.createElement('div');
+    panel.id = 'renMouthCheckPanel';
+    panel.className = 'ren-mouth-check';
+
+    const label = document.createElement('span');
+    label.className = 'ren-mouth-check__label';
+    label.textContent = JP.mouthCheck;
+
+    const group = document.createElement('div');
+    group.className = 'ren-mouth-check__group';
+
+    [
+      ['normal', JP.mouthNormal],
+      ['small', JP.mouthSmall],
+      ['open', JP.mouthOpen],
+      ['round', JP.mouthRound]
+    ].forEach(([mode, text]) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'ren-mouth-check__btn';
+      button.dataset.mode = mode;
+      button.textContent = text;
+
+      button.addEventListener('click', () => {
+        if (button.disabled) return;
+        mouthCheckMode = mode;
+        applyMouthCheck();
+      });
+
+      group.appendChild(button);
+      mouthCheckButtons[mode] = button;
+    });
+
+    panel.append(label, group);
+
+    const displayPanel = document.getElementById('renDisplayCheckPanel');
+    if (displayPanel?.parentElement) {
+      displayPanel.insertAdjacentElement('afterend', panel);
+    } else {
+      const themeContainer = lavBtn?.parentElement;
+      if (themeContainer?.parentElement) {
+        themeContainer.insertAdjacentElement('afterend', panel);
+      } else if (app) {
+        app.prepend(panel);
+      } else {
+        document.body.prepend(panel);
+      }
+    }
+
+    const style = document.createElement('style');
+    style.id = 'renMouthCheckStyle';
+    style.textContent = `
+      .ren-mouth-check {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin: 0 0 12px;
+        padding: 8px 10px;
+        border: 1px solid rgba(255,255,255,.12);
+        border-radius: 14px;
+        background: rgba(255,255,255,.04);
+        font-size: 13px;
+      }
+
+      .ren-mouth-check__label {
+        opacity: .72;
+        white-space: nowrap;
+      }
+
+      .ren-mouth-check__group {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 6px;
+      }
+
+      .ren-mouth-check__btn {
+        appearance: none;
+        border: 1px solid rgba(255,255,255,.14);
+        border-radius: 999px;
+        padding: 7px 11px;
+        background: rgba(255,255,255,.05);
+        color: inherit;
+        font: inherit;
+        font-weight: 700;
+      }
+
+      .ren-mouth-check__btn.is-active {
+        background: #f5f5f7;
+        color: #111216;
+      }
+
+      .ren-mouth-check__btn:disabled {
+        cursor: default;
+      }
+    `;
+
+    document.head.appendChild(style);
+    updateMouthCheckButtons();
+  }
+
+  // èªåè¡¨ç¤ºæã¯ã6æã»18æãªã©ã®åãæ¿ãããæ¾ãã
   setInterval(() => {
     if (displayMode === 'auto') {
       const { season, slot } = currentProfile();
@@ -438,7 +618,7 @@
     voiceBtn.textContent = voiceOn ? JP.voiceOn : JP.voiceOff;
   });
 
-  // 今は目元の確認段階なので、口パクはまだ動かさない。
+  // å®éã®èªåå£ãã¯ã¯ã¾ã æªæ¥ç¶ãä»åã¯ç´ æç¢ºèªããã«ã ãæå¹ã«ããã
   if (lipBtn) {
     lipBtn.disabled = true;
     lipBtn.classList.remove('active');
@@ -502,5 +682,6 @@
 
   applyAuto();
   createDisplayCheckPanel();
+  createMouthCheckPanel();
   applyCurrentRen(true);
 })();
