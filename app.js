@@ -82,9 +82,13 @@
       base: withVersion(`${folder}/ren_base.png`),
       eyesHalf: withVersion(`${folder}/eyes_half.png`),
       eyesClosed: withVersion(`${folder}/eyes_closed.png`),
-      mouthSmall: withVersion(`${folder}/mouth_small.png`),
-      mouthOpen: withVersion(`${folder}/mouth_open.png`),
-      mouthRound: withVersion(`${folder}/mouth_round.png`)
+      // 完成した口形別「全体写真」。透明の口元PNGではない。
+      // 口元の見せる部分だけを端末内で生成し、目元とは別に重ねる。
+      mouthA: `${folder}/mouth_a.jpg?v=20261008_v1`,
+      mouthI: `${folder}/mouth_i.jpg?v=20261008_v1`,
+      mouthU: `${folder}/mouth_u.jpg?v=20261008_v1`,
+      mouthE: `${folder}/mouth_e.jpg?v=20261008_v1`,
+      mouthO: `${folder}/mouth_o.jpg?v=20261008_v1`
     };
   }
 
@@ -102,10 +106,20 @@
     closed: false
   };
 
-  let mouthAvailability = {
-    small: false,
-    open: false,
-    round: false
+  const VOWELS = ['a', 'i', 'u', 'e', 'o'];
+  let mouthAvailability = { a: false, i: false, u: false, e: false, o: false };
+  let mouthMaskedImages = {};
+  let mouthBlobUrls = [];
+
+  // 数値は元の1024×1536px写真のピクセル座標。表示時に写真を動かすものではない。
+  // 画像ごとに「口・ヒゲ・顎上部」を隠しきるようマスクの範囲を調整できる。
+  // featherは外周のみ。内部の口元は不透明（opacity=1）。
+  const MOUTH_MASKS = {
+    a: { cx: 428, cy: 430, rx: 135, ry: 102, angle: -17, feather: 10 },
+    i: { cx: 428, cy: 430, rx: 125, ry:  94, angle: -17, feather: 10 },
+    u: { cx: 428, cy: 430, rx: 129, ry: 102, angle: -17, feather: 10 },
+    e: { cx: 428, cy: 430, rx: 132, ry:  98, angle: -17, feather: 10 },
+    o: { cx: 428, cy: 430, rx: 136, ry: 106, angle: -17, feather: 10 }
   };
 
   let mouthPracticeOn = false;
@@ -150,13 +164,87 @@
     mouthLayer.style.opacity = '1';
   }
 
+  // 完成写真を加工・描き直すのではなく、写真の元ピクセルをそのまま使い、
+  // 必要な位置の透明度だけを端末内Canvasで付ける。
+  function readFullMouthPhoto(src) {
+    return new Promise((resolve) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => resolve(null);
+      image.src = src;
+    });
+  }
+
+  async function makeMaskedMouthUrl(src, shape) {
+    const image = await readFullMouthPhoto(src);
+    if (!image) return null;
+
+    // 基準画像と寸法が違えば勝手にリサイズせず、使用を止める。
+    const width = renBase?.naturalWidth || 1024;
+    const height = renBase?.naturalHeight || 1536;
+    if (width !== 1024 || height !== 1536 ||
+        image.naturalWidth !== width || image.naturalHeight !== height) {
+      console.warn('Mouth image size mismatch:', src, image.naturalWidth, image.naturalHeight);
+      return null;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    // drawImageは写真全体を同じ座標・同じサイズで描画。切り貼りによる位置変更はなし。
+    ctx.drawImage(image, 0, 0);
+
+    // 別の透明Canvasに「口元以外は全部透明」のマスクを描き、
+    // それを全面に適用する。描画枠の外に元画像が残るのを防ぐ。
+    const matte = document.createElement('canvas');
+    matte.width = width;
+    matte.height = height;
+    const matteCtx = matte.getContext('2d');
+    if (!matteCtx) return null;
+    matteCtx.save();
+    matteCtx.translate(shape.cx, shape.cy);
+    matteCtx.rotate(shape.angle * Math.PI / 180);
+    matteCtx.scale(shape.rx, shape.ry);
+
+    const innerRadius = 1 - Math.min(0.3, shape.feather / Math.min(shape.rx, shape.ry));
+    const mask = matteCtx.createRadialGradient(0, 0, 0, 0, 0, 1);
+    mask.addColorStop(0, 'rgba(0,0,0,1)');
+    mask.addColorStop(innerRadius, 'rgba(0,0,0,1)');
+    mask.addColorStop(1, 'rgba(0,0,0,0)');
+    matteCtx.fillStyle = mask;
+    matteCtx.fillRect(-1.1, -1.1, 2.2, 2.2);
+    matteCtx.restore();
+    ctx.globalCompositeOperation = 'destination-in';
+    ctx.drawImage(matte, 0, 0);
+    ctx.globalCompositeOperation = 'source-over';
+
+    return new Promise((resolve) => {
+      try {
+        canvas.toBlob((blob) => {
+          resolve(blob ? URL.createObjectURL(blob) : null);
+        }, 'image/png');
+      } catch (error) {
+        console.warn('Mouth mask could not be created:', error);
+        resolve(null);
+      }
+    });
+  }
+
+  function discardMouthMasks() {
+    mouthBlobUrls.forEach((url) => URL.revokeObjectURL(url));
+    mouthBlobUrls = [];
+    mouthMaskedImages = {};
+    mouthAvailability = { a: false, i: false, u: false, e: false, o: false };
+    updateLipButton();
+  }
+
   function updateLipButton() {
     if (!lipBtn) return;
 
-    const hasAnyMouth =
-      mouthAvailability.small ||
-      mouthAvailability.open ||
-      mouthAvailability.round;
+    const hasAnyMouth = VOWELS.some((vowel) => mouthAvailability[vowel]);
 
     lipBtn.disabled = !hasAnyMouth;
     lipBtn.style.opacity = hasAnyMouth ? '1' : '0.55';
@@ -174,11 +262,11 @@
   async function runMouthPractice() {
     if (!activeAssets) return;
 
-    const frames = [
-      { available: mouthAvailability.small, src: activeAssets.mouthSmall },
-      { available: mouthAvailability.open, src: activeAssets.mouthOpen },
-      { available: mouthAvailability.round, src: activeAssets.mouthRound }
-    ].filter((frame) => frame.available);
+    // 閉じ口（元ベース）→あ→い→う→え→お→閉じ口を繰り返す。
+    // タイミング・ワンタップ開始／再タップ停止は従来と同じ。
+    const frames = VOWELS
+      .filter((vowel) => mouthAvailability[vowel])
+      .map((vowel) => ({ src: mouthMaskedImages[vowel] }));
 
     if (!frames.length) {
       stopMouthPractice();
@@ -195,7 +283,7 @@
       await sleep(700);
       if (!mouthPracticeOn || token !== mouthPracticeToken) break;
 
-      // å° â å¤§ â ãã»ãï¼å­å¨ããç´ æã ãé çªã«ç¢ºèªï¼
+      // あ・い・う・え・お（存在する画像だけ順に表示）
       for (const frame of frames) {
         showMouth(frame.src);
         await sleep(900);
@@ -209,7 +297,8 @@
       await sleep(700);
     }
 
-    hideMouth();
+    // 前の練習ループが終了した時、新しいループの表示を消さない。
+    if (token === mouthPracticeToken) hideMouth();
   }
 
   function stopBlinking() {
@@ -331,17 +420,30 @@
   }
 
   async function prepareMouth(assets, tokenAtStart) {
-    const [small, open, round] = await Promise.all([
-      preloadImage(assets.mouthSmall),
-      preloadImage(assets.mouthOpen),
-      preloadImage(assets.mouthRound)
-    ]);
+    const prepared = {};
+    const ownedUrls = [];
+
+    // 現在選択中の季節・昼夜フォルダの5枚だけを順に処理する。
+    // 無い画像はスキップし、古いmouth_small等へ勝手にフォールバックしない。
+    for (const vowel of VOWELS) {
+      if (tokenAtStart !== switchToken || activeAssets?.key !== assets.key) break;
+      const assetKey = `mouth${vowel.toUpperCase()}`;
+      const url = await makeMaskedMouthUrl(assets[assetKey], MOUTH_MASKS[vowel]);
+      if (url) {
+        prepared[vowel] = url;
+        ownedUrls.push(url);
+      }
+    }
 
     if (tokenAtStart !== switchToken || activeAssets?.key !== assets.key) {
+      ownedUrls.forEach((url) => URL.revokeObjectURL(url));
       return;
     }
 
-    mouthAvailability = { small, open, round };
+    discardMouthMasks();
+    mouthMaskedImages = prepared;
+    mouthBlobUrls = ownedUrls;
+    mouthAvailability = Object.fromEntries(VOWELS.map((vowel) => [vowel, Boolean(prepared[vowel])]));
     updateLipButton();
   }
 
@@ -369,6 +471,7 @@
     const switched = await switchBaseImage(assets.base, instant);
     if (!switched) return;
 
+    discardMouthMasks();
     activeAssets = assets;
     activeProfileKey = assets.key;
 
@@ -533,7 +636,7 @@
   });
 
   // æ¢å­ã®ãå£ãã¯ç·´ç¿ããã¿ã³ã ããä½¿ãã
-  // 1åæ¼ãã¨ éå¸¸ â å° â å¤§ â ãã»ã â éå¸¸â¦ ãç¹°ãè¿ãã
+  // 1回押すと 閉じ口 → あ → い → う → え → お → 閉じ口… を繰り返す。
   // ãã1åæ¼ãã¨åæ­¢ãã¦éå¸¸ã®éãå£ã¸æ»ãã
   if (lipBtn) {
     lipBtn.disabled = true;
