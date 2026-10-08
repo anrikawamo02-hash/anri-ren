@@ -115,7 +115,7 @@
   // 画像ごとに「口・ヒゲ・顎上部」を隠しきるようマスクの範囲を調整できる。
   // featherは外周のみ。内部の口元は不透明（opacity=1）。
   const MOUTH_MASKS = {
-    a: { cx: 428, cy: 425, rx: 135, ry: 97, angle: -17, feather: 10 },
+    a: { cx: 428, cy: 420, rx: 135, ry: 92, angle: -17, feather: 10 },
     i: { cx: 428, cy: 430, rx: 125, ry:  94, angle: -17, feather: 10 },
     u: { cx: 428, cy: 430, rx: 129, ry: 102, angle: -17, feather: 10 },
     e: { cx: 428, cy: 430, rx: 132, ry:  98, angle: -17, feather: 10 },
